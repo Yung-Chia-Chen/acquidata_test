@@ -3,6 +3,7 @@
 #include <chrono>
 #include <csignal>
 #include <cstring>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -88,7 +89,23 @@ static std::string hostTimeSeconds()
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 
     std::ostringstream out;
-    out << (ms / 1000) << "." << std::setw(3) << std::setfill('0') << (ms % 100);
+    out << (ms / 1000) << "." << std::setw(3) << std::setfill('0') << (ms % 1000);
+    return out.str();
+}
+
+static std::string hostTimeLocal()
+{
+    const auto now = std::chrono::system_clock::now();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    const std::time_t seconds = static_cast<std::time_t>(ms / 1000);
+    std::tm localTime{};
+    localtime_r(&seconds, &localTime);
+
+    char buffer[32] = {0};
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &localTime);
+
+    std::ostringstream out;
+    out << buffer << "." << std::setw(3) << std::setfill('0') << (ms % 1000);
     return out.str();
 }
 
@@ -177,7 +194,7 @@ int main(int argc, char* argv[])
             throw std::runtime_error("cannot create csv file");
         }
 
-        csv << "host_time_s,type,t_ms,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps,temp_c,accel_norm_g\n";
+        csv << "host_time_s,host_time_local,type,t_ms,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps,temp_c,accel_norm_g\n";
 
         const int serial = openSerialPort(portName, baudRate);
 
@@ -216,7 +233,7 @@ int main(int argc, char* argv[])
                         continue;
                     }
 
-                    csv << hostTimeSeconds();
+                    csv << hostTimeSeconds() << ',' << hostTimeLocal();
                     for (const std::string& part : parts)
                     {
                         csv << ',' << part;

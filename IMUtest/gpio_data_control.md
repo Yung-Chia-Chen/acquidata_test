@@ -5,37 +5,77 @@
 ## 硬體接線
 
 - 按鈕：連接到 `GPIO27`
-- LED：連接到 `GPIO26`
+- LED：連接到 `GPIO23`（BCM 23，實體腳位 16），另一端接 GND（實體腳位 20）
 
 按鈕採用內部上拉，按下時會觸發低電位。
 
 ## 功能
 
-程式使用 **GPIO23 和 GPIO25** 控制 LED 狀態：
+程式預設使用 **GPIO23** 控制單顆 LED 狀態：
 
 - 按一次按鈕開始收集：
-  - **LED 亮起**（GPIO23 high、GPIO25 low）
+   - **LED 亮起**（GPIO23 high）
   - 啟動 `IMUtest/tools/record_three_esp32.sh`，開始收集三路串口資料
   - 數據蒐集開始時會亮起，表示系統正在進行數據收集
 
 - 再按一次按鈕停止收集：
-  - **LED 熄滅**（GPIO23 low、GPIO25 high）
+   - **LED 熄滅**（GPIO23 low）
   - 送出 `SIGINT` 停止三個資料蒐集程式
-  - **停止狀態預設另一個 LED 亮**，表示系統就緒
+   - 停止狀態 LED 關閉，表示系統就緒
 
-## 使用步驟
+如果你有兩個 LED，可以使用 `--led-red-pin` 和 `--led-blue-pin` 來切換紅/藍顯示。
+
+## 使用步驟 terminal
 
 1. 進入專案資料夾：
    ```bash
    cd /home/chc/code/IMUtest
    ```
-
-2. 執行控制程式：
+2. 開啟tmux
+   ```
+   tmux new -s imu
+   ```
+3. 執行控制程式：
    ```bash
    ./gpio_data_control.py
    ```
 
-3. 按下按鈕開始收集，按第二次按鈕停止收集。
+4. 按下按鈕開始收集，按第二次按鈕停止收集。
+
+## tmux 常用指令
+
+- 開新 session：
+   ```bash
+   tmux new -s imu
+   ```
+- 暫時離開 tmux（保持背景跑）：
+   - 按 `Ctrl-b`，放開後按 `d`
+- 回到既有 session：
+   ```bash
+   tmux attach -t imu
+   ```
+- 列出所有 session：
+   ```bash
+   tmux ls
+   ```
+- 結束指定 session：
+   ```bash
+   tmux kill-session -t imu
+   ```
+
+## SSH 斷線仍可收資料
+
+只要 `gpio_data_control.py` 在 tmux 裡執行，SSH 斷線後仍會繼續跑。建議流程：
+
+1. 進 tmux 執行程式
+2. 斷線前按 `Ctrl-b` 然後 `d`
+3. 需要看狀態時再用 `tmux attach -t imu`
+
+## 樹莓派關機
+
+```bash
+sudo shutdown -h now
+```
 
 ## 參數
 
@@ -70,27 +110,31 @@
 在實際使用前，建議先測試 LED 和按鈕是否正常工作：
 
 1. 基本 LED 測試（檢查 GPIO 輸出是否正確）：
-   ```bash
-   python3 gpio_data_control.py --test-led --led-red-pin 23 --led-blue-pin 25
-   ```
-   此時程式會：
-   - 先輸出初始狀態：藍燈亮
-   - 然後點亮紅燈 2 秒
-   - 最後回到藍燈亮
+    - 單顆 LED：
+       ```bash
+       python3 gpio_data_control.py --test-led
+       ```
+       會點亮 2 秒再關閉。
+
+    - 兩顆 LED：
+       ```bash
+       python3 gpio_data_control.py --test-led --led-red-pin 23 --led-blue-pin 25
+       ```
+       會先顯示藍燈，再點亮紅燈 2 秒，最後回到藍燈。
 
 2. 如果 LED 未亮，檢查清單：
-   - 確認 GPIO23 和 GPIO25 已正確接線
+   - 確認 GPIO23（實體 16）已正確接線
    - LED 正極接到 GPIO，負極接 GND（或確認極性接法）
    - 確認有串聯 220~330Ω 限流電阻
    - 如果 LED 是接到 3.3V 另一端接 GPIO，則加 `--led-active-low`
 
 3. 按鈕測試（搭配數據收集）：
    ```bash
-   python3 gpio_data_control.py --led-red-pin 23 --led-blue-pin 25
+   python3 gpio_data_control.py
    ```
-   - 程式啟動時，藍燈應該亮著（停止狀態）
-   - 按下按鈕一次，應看見藍燈滅、紅燈亮，同時終端輸出開始收集訊息
-   - 再按一次按鈕，應看見紅燈滅、藍燈亮，同時終端輸出停止訊息
+   - 程式啟動時，LED 應該是關閉（停止狀態）
+   - 按下按鈕一次，應看見 LED 亮起，同時終端輸出開始收集訊息
+   - 再按一次按鈕，應看見 LED 熄滅，同時終端輸出停止訊息
 
 ## 先決條件
 
@@ -128,7 +172,7 @@
 python3 gpio_data_control.py --test-led
 ```
 
-如果 LED 是直接接到 `GPIO26`，應該使用預設的 active-high。若 LED 接到 `3.3V` 則改用 `--led-active-low`。
+如果 LED 正極直接接到 `GPIO23`，應該使用預設的 active-high。若 LED 接到 `3.3V` 則改用 `--led-active-low`。
 
 ## 開機自動啟動（可選）
 

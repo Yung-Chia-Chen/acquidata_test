@@ -15,8 +15,8 @@ except ImportError:
 HERE = os.path.abspath(os.path.dirname(__file__))
 SCRIPT_PATH = os.path.join(HERE, "tools", "record_three_esp32.sh")
 BUTTON_PIN = 27
-LED_PIN = 17
-RED_LED_PIN = 17
+LED_PIN = 23
+RED_LED_PIN = 23
 BLUE_LED_PIN = None
 LED_ACTIVE_HIGH = True  # 如果 LED 接到 GPIO 直接點亮，保持 True；如果 LED 接到 3.3V 並接 GPIO 拉低點亮，設 False
 LED_PINS = []
