@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CCPA Telemetry</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7f8;
+      --panel: #ffffff;
+      --text: #172026;
+      --muted: #60707c;
+      --line: #d9e0e5;
+      --accent: #087f8c;
+      --accent-soft: #d8f1f3;
+      --warn: #a05a00;
+      --bad: #b42318;
+      --good: #16703c;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    button, select {
+      font: inherit;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    h1 {
+      font-size: 20px;
+      line-height: 1.2;
+      margin: 0;
+      font-weight: 680;
+      letter-spacing: 0;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .status {
+      min-width: 118px;
+      height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      background: #f8fafb;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #8a9aa5;
+      flex: 0 0 auto;
+    }
+
+    .status.connected .dot {
+      background: var(--good);
+    }
+
+    .status.error .dot {
+      background: var(--bad);
+    }
+
+    .btn {
+      height: 34px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      padding: 0 13px;
+      cursor: pointer;
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      color: #93a1aa;
+      background: #eef2f4;
+    }
+
+    main {
+      padding: 18px 22px 22px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .tile, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .tile {
+      min-height: 118px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .label {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.25;
+    }
+
+    .value {
+      font-size: 30px;
+      line-height: 1;
+      font-weight: 720;
+      letter-spacing: 0;
+      word-break: break-word;
+    }
+
+    .unit {
+      font-size: 13px;
+      color: var(--muted);
+      margin-left: 4px;
+      font-weight: 520;
+    }
+
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      border-top: 1px solid #edf1f3;
+      padding-top: 9px;
+    }
+
+    .panel {
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      margin: 0;
+      padding: 13px 14px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .frames {
+      max-height: calc(100vh - 156px);
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      background: #11191f;
+      color: #dbe7ee;
+      padding: 10px 12px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .source {
+      color: var(--accent);
+      font-weight: 650;
+    }
+
+    .unknown {
+      color: #8a9aa5;
+    }
+
+    .warning {
+      color: var(--warn);
+    }
+
+    @media (max-width: 1120px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .frames {
+        max-height: 320px;
+      }
+    }
+
+    @media (max-width: 620px) {
+      header {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 14px;
+      }
+
+      .toolbar {
+        justify-content: flex-start;
+      }
+
+      main {
+        padding: 14px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>CCPA Telemetry</h1>
+      <div class="toolbar">
+        <div id="status" class="status"><span class="dot"></span><span id="statusText">Idle</span></div>
+        <button id="connectBtn" class="btn primary">Connect</button>
+        <button id="disconnectBtn" class="btn" disabled>Disconnect</button>
+        <button id="clearBtn" class="btn">Clear</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="grid" aria-label="Telemetry values">
+        <article class="tile" data-key="bikeSpeedKph">
+          <div class="label">車速</div>
+          <div><span class="value unknown">--</span><span class="unit">KPH</span></div>
+          <div class="meta"><span class="source">--</span><span class="age">--</span></div>
+        </article>
+        <article class="tile" data-key="cadenceRpm">
+          <div class="label">踏頻</div>
+          <div><span class="value unknown">--</span><span class="unit">RPM</span></div>
+          <div class="meta"><span class="source">--</span><span class="age">--</span></div>
+        </article>
+        <article class="tile" data-key="assistLevel">
+          <div class="label">輔助力段數</div>
+          <div><span class="value unknown">--</span><span class="unit">Level</span></div>
+          <div class="meta"><span class="source">--</span><span class="age">--</span></div>
+        </article>
+        <article class="tile" data-key="batterySocPct">
+          <div class="label">電池電量</div>
+          <div><span class="value unknown">--</span><span class="unit">%</span></div>
+          <div class="meta"><span class="source">--</span><span class="age">--</span></div>
+        </article>
+        <article class="tile" data-key="batteryVoltageMv">
+          <div class="label">電池電壓</div>
+          <div><span class="value unknown">--</span><span class="unit">mV</span></div>
+          <div class="meta"><span class="source">--</span><span class="age">--</span></div>
+        </article>
+        <article class="tile" data-key="batteryCurrentMa">
+          <div class="label">電池電流</div>
+          <div><span class="value unknown">--</span><span class="unit">mA</span></div>
+          <div class="meta"><span class="source">--</span><span class="age">--</span></div>
+        </article>
+        <article class="tile" data-key="batteryTempsC">
+          <div class="label">電池溫度</div>
+          <div><span class="value unknown">--</span><span class="unit">°C</span></div>
+          <div class="meta"><span class="source">--</span><span class="age">--</span></div>
+        </article>
+        <article class="tile" data-key="rearGearIndex">
+          <div class="label">變速器目前檔位</div>
+          <div><span class="value unknown">--</span><span class="unit">Gear</span></div>
+          <div class="meta"><span class="source">--</span><span class="age">--</span></div>
+        </article>
+      </section>
+
+      <aside class="panel">
+        <h2>Serial Frames</h2>
+        <div id="frames" class="frames"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const baudRate = 115200;
+    const connectBtn = document.getElementById("connectBtn");
+    const disconnectBtn = document.getElementById("disconnectBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const statusEl = document.getElementById("status");
+    const statusText = document.getElementById("statusText");
+    const framesEl = document.getElementById("frames");
+    const tiles = new Map([...document.querySelectorAll(".tile")].map((el) => [el.dataset.key, el]));
+
+    let port;
+    let reader;
+    let keepReading = false;
+    let lineBuffer = "";
+    const values = {};
+
+    const decoders = {
+      0x029404FE: decodeGeneralInfo00,
+      0x029404FA: decodeGeneralInfo01,
+      0x02940015: decodeCentralAssistReq,
+      0x1E942042: decodeControllerInfo00,
+      0x1E94204E: decodeControllerInfo03,
+      0x1E942C40: decodeHmiInfo00,
+      0x1E942C42: decodeHmiInfo00,
+      0x1E942446: decodeBatteryInfo01,
+      0x1E94245A: decodeBatteryInfo06,
+      0x1E944842: decodeRearDerailleurInfo00
+    };
+
+    connectBtn.addEventListener("click", connectSerial);
+    disconnectBtn.addEventListener("click", disconnectSerial);
+    clearBtn.addEventListener("click", () => {
+      framesEl.textContent = "";
+      for (const key of Object.keys(values)) delete values[key];
+      renderAll();
+    });
+
+    setInterval(updateAges, 1000);
+    renderAll();
+
+    async function connectSerial() {
+      if (!("serial" in navigator)) {
+        setStatus("Web Serial unavailable", "error");
+        return;
+      }
+
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate });
+        keepReading = true;
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+        setStatus("Connected", "connected");
+        readLoop();
+      } catch (error) {
+        setStatus(error.message || "Connect failed", "error");
+      }
+    }
+
+    async function disconnectSerial() {
+      keepReading = false;
+      try {
+        if (reader) {
+          await reader.cancel();
+          reader.releaseLock();
+          reader = null;
+        }
+        if (port) {
+          await port.close();
+          port = null;
+        }
+      } catch (error) {
+        appendFrame(`Disconnect: ${error.message || error}`);
+      }
+      connectBtn.disabled = false;
+      disconnectBtn.disabled = true;
+      setStatus("Idle", "");
+    }
+
+    async function readLoop() {
+      const decoder = new TextDecoder();
+      while (port && keepReading) {
+        try {
+          reader = port.readable.getReader();
+          while (keepReading) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            consumeText(decoder.decode(value, { stream: true }));
+          }
+        } catch (error) {
+          if (keepReading) setStatus(error.message || "Read failed", "error");
+        } finally {
+          if (reader) {
+            reader.releaseLock();
+            reader = null;
+          }
+        }
+      }
+    }
+
+    function consumeText(text) {
+      lineBuffer += text.replace(/\r/g, "");
+      let newlineIndex;
+      while ((newlineIndex = lineBuffer.indexOf("\n")) >= 0) {
+        const line = lineBuffer.slice(0, newlineIndex).trim();
+        lineBuffer = lineBuffer.slice(newlineIndex + 1);
+        if (line) processLine(line);
+      }
+    }
+
+    function processLine(line) {
+      appendFrame(line);
+      parseRawFrame(line);
+      parseTelemetryLine(line);
+    }
+
+    function parseRawFrame(line) {
+      const match = line.match(/RAW RX\s+\S+\s+ID=0x([0-9A-Fa-f]+)\s+DLC=(\d+)\s+DATA=([0-9A-Fa-f ]*)/);
+      if (!match) return;
+
+      const id = Number.parseInt(match[1], 16);
+      const dlc = Number.parseInt(match[2], 10);
+      const bytes = match[3].trim() ? match[3].trim().split(/\s+/).slice(0, dlc).map((part) => Number.parseInt(part, 16)) : [];
+      const decoder = decoders[id];
+      if (decoder) decoder(bytes, id);
+    }
+
+    function parseTelemetryLine(line) {
+      let match;
+      if ((match = line.match(/Bike speed = ([\d.]+) KPH/))) setValue("bikeSpeedKph", Number(match[1]), "telemetry");
+      else if ((match = line.match(/Cadence = (\d+) RPM/))) setValue("cadenceRpm", Number(match[1]), "telemetry");
+      else if ((match = line.match(/Assist level = (\d+)/))) setValue("assistLevel", Number(match[1]), "telemetry");
+      else if ((match = line.match(/Battery SOC = (\d+) %/))) setValue("batterySocPct", Number(match[1]), "telemetry");
+      else if ((match = line.match(/Battery voltage = (\d+) mV/))) setValue("batteryVoltageMv", Number(match[1]), "telemetry");
+      else if ((match = line.match(/Battery current = (\d+) mA/))) setValue("batteryCurrentMa", Number(match[1]), "telemetry");
+      else if ((match = line.match(/Rear gear = (\d+) \/ (\d+)/))) setValue("rearGearIndex", `${match[1]} / ${match[2]}`, "telemetry");
+      else if ((match = line.match(/Battery temps = ([\d\-, ]+) C/))) setValue("batteryTempsC", match[1].trim(), "telemetry");
+    }
+
+    function decodeGeneralInfo00(bytes, id) {
+      if (bytes.length < 6) return;
+      const speedRaw = u16(bytes[0], bytes[1]);
+      if (speedRaw !== 0xFFFF) setValue("bikeSpeedKph", speedRaw * 0.01, hexId(id));
+      setValue("cadenceRpm", bytes[4], hexId(id));
+
+      const assist = (bytes[5] >> 2) & 0x0F;
+      setAssistLevel(assist, hexId(id));
+    }
+
+    function decodeGeneralInfo01(bytes, id) {
+      if (bytes.length >= 5 && bytes[4] !== 0xFF) setValue("batterySocPct", bytes[4], hexId(id));
+    }
+
+    function decodeCentralAssistReq(bytes, id) {
+      if (bytes.length >= 2) setAssistLevel(bytes[1] & 0x0F, hexId(id));
+    }
+
+    function decodeHmiInfo00(bytes, id) {
+      if (bytes.length >= 1) setAssistLevel(bytes[0] & 0x0F, hexId(id));
+    }
+
+    function decodeControllerInfo00(bytes, id) {
+      if (bytes.length < 2) return;
+      const speedRaw = u16(bytes[0], bytes[1]);
+      if (speedRaw !== 0xFFFF) setValue("bikeSpeedKph", speedRaw * 0.01, hexId(id));
+    }
+
+    function decodeControllerInfo03(bytes, id) {
+      if (bytes.length >= 4) setValue("cadenceRpm", bytes[3], hexId(id));
+    }
+
+    function decodeBatteryInfo01(bytes, id) {
+      if (bytes.length < 7) return;
+      setValue("batteryVoltageMv", u24(bytes[0], bytes[1], bytes[2]), hexId(id));
+      setValue("batteryCurrentMa", u16(bytes[4], bytes[5]), hexId(id));
+      if (bytes[6] !== 0xFF) setValue("batterySocPct", bytes[6], hexId(id));
+    }
+
+    function decodeBatteryInfo06(bytes, id) {
+      if (bytes.length < 4) return;
+      setValue("batteryTempsC", bytes.slice(0, 4).map(temp).join(", "), hexId(id));
+    }
+
+    function decodeRearDerailleurInfo00(bytes, id) {
+      if (bytes.length >= 2) setValue("rearGearIndex", `${bytes[0]} / ${bytes[1]}`, hexId(id));
+    }
+
+    function setAssistLevel(level, source) {
+      if (level <= 5) setValue("assistLevel", level, source);
+    }
+
+    function setValue(key, value, source) {
+      values[key] = { value, source, time: Date.now() };
+      renderValue(key);
+    }
+
+    function renderAll() {
+      for (const key of tiles.keys()) renderValue(key);
+    }
+
+    function renderValue(key) {
+      const tile = tiles.get(key);
+      if (!tile) return;
+      const record = values[key];
+      const valueEl = tile.querySelector(".value");
+      const sourceEl = tile.querySelector(".source");
+      const ageEl = tile.querySelector(".age");
+
+      if (!record) {
+        valueEl.textContent = "--";
+        valueEl.classList.add("unknown");
+        sourceEl.textContent = "--";
+        ageEl.textContent = "--";
+        return;
+      }
+
+      valueEl.textContent = formatValue(key, record.value);
+      valueEl.classList.remove("unknown");
+      sourceEl.textContent = record.source;
+      ageEl.textContent = ageText(record.time);
+    }
+
+    function updateAges() {
+      for (const key of Object.keys(values)) renderValue(key);
+    }
+
+    function formatValue(key, value) {
+      if (key === "bikeSpeedKph") return Number(value).toFixed(2);
+      return String(value);
+    }
+
+    function appendFrame(line) {
+      const shouldStick = framesEl.scrollTop + framesEl.clientHeight >= framesEl.scrollHeight - 18;
+      framesEl.textContent += line + "\n";
+      const lines = framesEl.textContent.split("\n");
+      if (lines.length > 500) framesEl.textContent = lines.slice(lines.length - 500).join("\n");
+      if (shouldStick) framesEl.scrollTop = framesEl.scrollHeight;
+    }
+
+    function setStatus(text, className) {
+      statusText.textContent = text;
+      statusEl.className = `status ${className || ""}`.trim();
+    }
+
+    function u16(lo, hi) {
+      return lo | (hi << 8);
+    }
+
+    function u24(b0, b1, b2) {
+      return b0 | (b1 << 8) | (b2 << 16);
+    }
+
+    function temp(raw) {
+      return raw - 64;
+    }
+
+    function hexId(id) {
+      return "0x" + id.toString(16).toUpperCase().padStart(8, "0");
+    }
+
+    function ageText(time) {
+      const seconds = Math.max(0, Math.floor((Date.now() - time) / 1000));
+      return seconds === 0 ? "now" : `${seconds}s`;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,1002 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bike IMU Live</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef3f4;
+      --panel: #ffffff;
+      --text: #162024;
+      --muted: #667680;
+      --line: #d6e0e3;
+      --teal: #087f8c;
+      --teal-soft: #dff3f5;
+      --blue: #2867c9;
+      --green: #18844f;
+      --amber: #b66b00;
+      --rose: #c43f5c;
+      --ink: #223038;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 3;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .status {
+      height: 34px;
+      min-width: 118px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #f8fafb;
+      font-size: 13px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #8c9ba3;
+    }
+
+    .status.connected .dot {
+      background: var(--green);
+    }
+
+    .status.error .dot {
+      background: var(--rose);
+    }
+
+    .btn {
+      height: 34px;
+      min-width: 78px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      padding: 0 13px;
+      cursor: pointer;
+    }
+
+    .btn.primary {
+      color: #ffffff;
+      background: var(--teal);
+      border-color: var(--teal);
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      color: #95a4ab;
+      background: #edf2f3;
+    }
+
+    main {
+      padding: 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.9fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .panel-head {
+      height: 48px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .head-meta {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .stage {
+      position: relative;
+      min-height: 520px;
+      padding: 18px;
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) minmax(220px, 0.72fr);
+      gap: 16px;
+      align-items: stretch;
+      background:
+        linear-gradient(#f8fbfb 1px, transparent 1px),
+        linear-gradient(90deg, #f8fbfb 1px, transparent 1px),
+        #f1f6f7;
+      background-size: 28px 28px;
+    }
+
+    .attitude-wrap {
+      min-height: 410px;
+      display: grid;
+      place-items: center;
+      perspective: 820px;
+      overflow: hidden;
+      border: 1px solid #d9e3e6;
+      background: linear-gradient(180deg, #edf7fb 0%, #f6faf8 48%, #eef3ec 100%);
+    }
+
+    .horizon {
+      position: absolute;
+      inset: auto 18px 50%;
+      height: 3px;
+      background: rgba(22, 32, 36, 0.18);
+      transform-origin: center;
+    }
+
+    .bike-plane {
+      position: relative;
+      width: min(78%, 500px);
+      aspect-ratio: 1.36 / 1;
+      transform-style: preserve-3d;
+      transition: transform 80ms linear;
+      will-change: transform;
+    }
+
+    .bike-deck {
+      position: absolute;
+      inset: 0;
+      border: 2px solid rgba(8, 127, 140, 0.88);
+      background:
+        linear-gradient(90deg, transparent 49.5%, rgba(196, 63, 92, 0.8) 49.5%, rgba(196, 63, 92, 0.8) 50.5%, transparent 50.5%),
+        linear-gradient(0deg, transparent 49.5%, rgba(40, 103, 201, 0.76) 49.5%, rgba(40, 103, 201, 0.76) 50.5%, transparent 50.5%),
+        linear-gradient(135deg, #ecfbf9 0%, #ffffff 48%, #e9f2ff 100%);
+      box-shadow: 0 24px 42px rgba(30, 45, 52, 0.2);
+    }
+
+    .bike-spine {
+      position: absolute;
+      left: 49%;
+      top: 10%;
+      bottom: 10%;
+      width: 2%;
+      background: rgba(22, 32, 36, 0.34);
+    }
+
+    .bike-front {
+      position: absolute;
+      left: 50%;
+      top: -38px;
+      transform: translateX(-50%);
+      display: grid;
+      place-items: center;
+      width: 78px;
+      height: 32px;
+      color: #ffffff;
+      background: var(--teal);
+      font-weight: 760;
+      font-size: 14px;
+      clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    }
+
+    .axis-label {
+      position: absolute;
+      min-width: 34px;
+      height: 26px;
+      padding: 0 8px;
+      display: grid;
+      place-items: center;
+      color: #ffffff;
+      background: rgba(34, 48, 56, 0.88);
+      font-size: 13px;
+      font-weight: 680;
+    }
+
+    .axis-label.left {
+      left: -46px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .axis-label.right {
+      right: -46px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .axis-label.back {
+      left: 50%;
+      bottom: -40px;
+      transform: translateX(-50%);
+    }
+
+    .motion-stack {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .direction-pad {
+      position: relative;
+      min-height: 288px;
+      border: 1px solid #d9e3e6;
+      background: #ffffff;
+      overflow: hidden;
+    }
+
+    .direction-pad::before,
+    .direction-pad::after {
+      content: "";
+      position: absolute;
+      background: #e4ecef;
+    }
+
+    .direction-pad::before {
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+    }
+
+    .direction-pad::after {
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 1px;
+    }
+
+    .pad-label {
+      position: absolute;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 680;
+    }
+
+    .pad-label.front {
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .pad-label.back {
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .pad-label.left {
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .pad-label.right {
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .motion-dot {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 3px solid #ffffff;
+      background: var(--rose);
+      box-shadow: 0 12px 22px rgba(196, 63, 92, 0.22);
+      transform: translate(-50%, -50%);
+      transition: transform 80ms linear;
+    }
+
+    .vertical-meter {
+      min-height: 96px;
+      display: grid;
+      grid-template-columns: 72px 1fr 72px;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid #d9e3e6;
+      background: #ffffff;
+      padding: 10px;
+    }
+
+    .vertical-meter .side {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 680;
+      text-align: center;
+    }
+
+    .vertical-track {
+      position: relative;
+      height: 18px;
+      background: #edf2f3;
+      overflow: hidden;
+    }
+
+    .vertical-track::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #b8c6cc;
+    }
+
+    .vertical-fill {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 0%;
+      background: var(--green);
+      transition: left 80ms linear, width 80ms linear, background 80ms linear;
+    }
+
+    .metrics {
+      padding: 14px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      min-height: 96px;
+      border: 1px solid #dfe7ea;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+      background: #ffffff;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .metric-value {
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 760;
+      letter-spacing: 0;
+      word-break: break-word;
+    }
+
+    .metric-unit {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 520;
+      margin-left: 3px;
+    }
+
+    .side-panel {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 18px;
+      min-height: 0;
+    }
+
+    .axis-panel {
+      padding: 14px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .axis-row {
+      display: grid;
+      grid-template-columns: 52px 1fr 64px;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .axis-name {
+      font-size: 13px;
+      font-weight: 730;
+      color: var(--ink);
+    }
+
+    .axis-track {
+      position: relative;
+      height: 18px;
+      background: #edf2f3;
+      overflow: hidden;
+    }
+
+    .axis-track::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #bac8ce;
+    }
+
+    .axis-fill {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 0%;
+      background: var(--blue);
+      transition: left 80ms linear, width 80ms linear, background 80ms linear;
+    }
+
+    .axis-value {
+      color: var(--muted);
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .log {
+      min-height: 260px;
+      max-height: calc(100vh - 510px);
+      overflow: auto;
+      padding: 12px;
+      color: #d7e3e8;
+      background: #121c22;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.52;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .unsupported {
+      display: none;
+      padding: 10px 14px;
+      color: #7a3800;
+      background: #fff1d9;
+      border-bottom: 1px solid #f0d29e;
+      font-size: 13px;
+    }
+
+    .unsupported.visible {
+      display: block;
+    }
+
+    @media (max-width: 1080px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .side-panel {
+        grid-template-columns: 1fr;
+      }
+
+      .log {
+        max-height: 300px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .toolbar {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      main {
+        padding: 12px;
+      }
+
+      .stage {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+
+      .metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .attitude-wrap {
+        min-height: 340px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Bike IMU Live</h1>
+      <div class="toolbar">
+        <div id="status" class="status"><span class="dot"></span><span id="statusText">未連線</span></div>
+        <button id="connectBtn" class="btn primary" type="button">連線</button>
+        <button id="zeroBtn" class="btn" type="button" disabled>歸零</button>
+        <button id="disconnectBtn" class="btn" type="button" disabled>斷線</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel">
+        <div id="unsupported" class="unsupported">這個瀏覽器沒有 Web Serial。請用 Chrome 或 Edge 開啟。</div>
+        <div class="panel-head">
+          <h2>姿態平面</h2>
+          <div id="sampleMeta" class="head-meta">0 Hz</div>
+        </div>
+        <div class="stage">
+          <div class="attitude-wrap">
+            <div id="horizon" class="horizon"></div>
+            <div id="bikePlane" class="bike-plane">
+              <div class="bike-deck"></div>
+              <div class="bike-spine"></div>
+              <div class="bike-front">前</div>
+              <div class="axis-label left">左</div>
+              <div class="axis-label right">右</div>
+              <div class="axis-label back">後</div>
+            </div>
+          </div>
+
+          <div class="motion-stack">
+            <div class="direction-pad">
+              <div class="pad-label front">前</div>
+              <div class="pad-label back">後</div>
+              <div class="pad-label left">左</div>
+              <div class="pad-label right">右</div>
+              <div id="motionDot" class="motion-dot"></div>
+            </div>
+            <div class="vertical-meter">
+              <div class="side">下</div>
+              <div class="vertical-track"><div id="zFill" class="vertical-fill"></div></div>
+              <div class="side">上</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric-label">前後</div>
+            <div><span id="frontValue" class="metric-value">0.00</span><span class="metric-unit">g</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">左右</div>
+            <div><span id="sideValue" class="metric-value">0.00</span><span class="metric-unit">g</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">上下</div>
+            <div><span id="upValue" class="metric-value">0.00</span><span class="metric-unit">g</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">姿態</div>
+            <div><span id="attitudeValue" class="metric-value">0/0</span><span class="metric-unit">deg</span></div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-panel">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>三方向</h2>
+            <div id="timeMeta" class="head-meta">0 ms</div>
+          </div>
+          <div class="axis-panel">
+            <div class="axis-row">
+              <div class="axis-name">前後</div>
+              <div class="axis-track"><div id="xFill" class="axis-fill"></div></div>
+              <div id="xText" class="axis-value">0.00 g</div>
+            </div>
+            <div class="axis-row">
+              <div class="axis-name">左右</div>
+              <div class="axis-track"><div id="yFill" class="axis-fill"></div></div>
+              <div id="yText" class="axis-value">0.00 g</div>
+            </div>
+            <div class="axis-row">
+              <div class="axis-name">上下</div>
+              <div class="axis-track"><div id="zAxisFill" class="axis-fill"></div></div>
+              <div id="zText" class="axis-value">0.00 g</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>旋轉</h2>
+            <div id="tempMeta" class="head-meta">0.0 °C</div>
+          </div>
+          <div class="axis-panel">
+            <div class="axis-row">
+              <div class="axis-name">GX</div>
+              <div class="axis-track"><div id="gxFill" class="axis-fill"></div></div>
+              <div id="gxText" class="axis-value">0.0 °/s</div>
+            </div>
+            <div class="axis-row">
+              <div class="axis-name">GY</div>
+              <div class="axis-track"><div id="gyFill" class="axis-fill"></div></div>
+              <div id="gyText" class="axis-value">0.0 °/s</div>
+            </div>
+            <div class="axis-row">
+              <div class="axis-name">GZ</div>
+              <div class="axis-track"><div id="gzFill" class="axis-fill"></div></div>
+              <div id="gzText" class="axis-value">0.0 °/s</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Serial</h2>
+            <div id="lineMeta" class="head-meta">0 lines</div>
+          </div>
+          <div id="log" class="log"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const elements = {
+      status: $("status"),
+      statusText: $("statusText"),
+      connectBtn: $("connectBtn"),
+      zeroBtn: $("zeroBtn"),
+      disconnectBtn: $("disconnectBtn"),
+      unsupported: $("unsupported"),
+      sampleMeta: $("sampleMeta"),
+      timeMeta: $("timeMeta"),
+      tempMeta: $("tempMeta"),
+      lineMeta: $("lineMeta"),
+      log: $("log"),
+      bikePlane: $("bikePlane"),
+      horizon: $("horizon"),
+      motionDot: $("motionDot"),
+      frontValue: $("frontValue"),
+      sideValue: $("sideValue"),
+      upValue: $("upValue"),
+      attitudeValue: $("attitudeValue"),
+      xFill: $("xFill"),
+      yFill: $("yFill"),
+      zFill: $("zFill"),
+      zAxisFill: $("zAxisFill"),
+      gxFill: $("gxFill"),
+      gyFill: $("gyFill"),
+      gzFill: $("gzFill"),
+      xText: $("xText"),
+      yText: $("yText"),
+      zText: $("zText"),
+      gxText: $("gxText"),
+      gyText: $("gyText"),
+      gzText: $("gzText"),
+    };
+
+    let port = null;
+    let reader = null;
+    let keepReading = false;
+    let latest = null;
+    let baseline = null;
+    let lineCount = 0;
+    let sampleCount = 0;
+    let lastHzAt = performance.now();
+    let logLines = [];
+
+    if (!("serial" in navigator)) {
+      elements.unsupported.classList.add("visible");
+      elements.connectBtn.disabled = true;
+      setStatus("error", "不支援");
+    }
+
+    elements.connectBtn.addEventListener("click", connectSerial);
+    elements.disconnectBtn.addEventListener("click", disconnectSerial);
+    elements.zeroBtn.addEventListener("click", () => {
+      if (latest) {
+        baseline = makeBaseline(latest);
+        render(latest);
+      }
+    });
+
+    function setStatus(kind, text) {
+      elements.status.classList.toggle("connected", kind === "connected");
+      elements.status.classList.toggle("error", kind === "error");
+      elements.statusText.textContent = text;
+    }
+
+    async function connectSerial() {
+      try {
+        port = await navigator.serial.requestPort({
+          filters: [
+            { usbVendorId: 0x1A86 },
+            { usbVendorId: 0x10C4 },
+            { usbVendorId: 0x0403 },
+          ],
+        });
+        await port.open({ baudRate: 115200 });
+        keepReading = true;
+        elements.connectBtn.disabled = true;
+        elements.disconnectBtn.disabled = false;
+        elements.zeroBtn.disabled = false;
+        setStatus("connected", "已連線");
+        readLoop();
+      } catch (error) {
+        if (error && error.name === "NotFoundError") {
+          setStatus("idle", "未選擇");
+          appendLog("未選擇序列埠，請重新按連線並選擇 USB Serial。");
+          return;
+        }
+        setStatus("error", "連線失敗");
+        appendLog(String(error.message || error));
+      }
+    }
+
+    async function disconnectSerial() {
+      keepReading = false;
+      try {
+        if (reader) {
+          await reader.cancel();
+        }
+      } catch (error) {
+        appendLog(String(error.message || error));
+      }
+    }
+
+    async function readLoop() {
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      try {
+        while (port && port.readable && keepReading) {
+          reader = port.readable.getReader();
+          try {
+            while (keepReading) {
+              const { value, done } = await reader.read();
+              if (done) {
+                break;
+              }
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split(/\r?\n/);
+              buffer = lines.pop() || "";
+              for (const line of lines) {
+                handleLine(line.trim());
+              }
+            }
+          } finally {
+            reader.releaseLock();
+            reader = null;
+          }
+        }
+      } catch (error) {
+        appendLog(String(error.message || error));
+        setStatus("error", "讀取中斷");
+      } finally {
+        if (port) {
+          await port.close().catch(() => {});
+        }
+        port = null;
+        elements.connectBtn.disabled = false;
+        elements.disconnectBtn.disabled = true;
+        elements.zeroBtn.disabled = !latest;
+        if (!keepReading) {
+          setStatus("idle", "未連線");
+        }
+      }
+    }
+
+    function handleLine(line) {
+      if (!line) {
+        return;
+      }
+
+      appendLog(line);
+      if (!line.startsWith("IMU,")) {
+        return;
+      }
+
+      const fields = line.split(",");
+      if (fields.length !== 10) {
+        return;
+      }
+
+      const sample = {
+        t: number(fields[1]),
+        ax: number(fields[2]),
+        ay: number(fields[3]),
+        az: number(fields[4]),
+        gx: number(fields[5]),
+        gy: number(fields[6]),
+        gz: number(fields[7]),
+        temp: number(fields[8]),
+        norm: number(fields[9]),
+      };
+
+      if (!isFinite(sample.ax) || !isFinite(sample.ay) || !isFinite(sample.az)) {
+        return;
+      }
+
+      latest = sample;
+      if (!baseline) {
+        baseline = makeBaseline(sample);
+      }
+      sampleCount += 1;
+      render(sample);
+      updateHz();
+    }
+
+    function number(value) {
+      return Number.parseFloat(value);
+    }
+
+    function makeBaseline(sample) {
+      const orientation = computeOrientation(sample);
+      return {
+        ax: sample.ax,
+        ay: sample.ay,
+        az: sample.az,
+        roll: orientation.roll,
+        pitch: orientation.pitch,
+      };
+    }
+
+    function computeOrientation(sample) {
+      const roll = radiansToDegrees(Math.atan2(sample.ay, sample.az));
+      const pitch = radiansToDegrees(Math.atan2(-sample.ax, Math.sqrt(sample.ay * sample.ay + sample.az * sample.az)));
+      return { roll, pitch };
+    }
+
+    function render(sample) {
+      const orientation = computeOrientation(sample);
+      const roll = clamp(orientation.roll - baseline.roll, -50, 50);
+      const pitch = clamp(orientation.pitch - baseline.pitch, -50, 50);
+
+      const frontBack = sample.ax - baseline.ax;
+      const sideSide = sample.ay - baseline.ay;
+      const upDown = sample.az - baseline.az;
+
+      elements.bikePlane.style.transform = `rotateX(${pitch}deg) rotateZ(${-roll}deg)`;
+      elements.horizon.style.transform = `translateY(${clamp(pitch * 2.4, -90, 90)}px) rotate(${-roll}deg)`;
+
+      const dotX = clamp(sideSide, -0.7, 0.7) / 0.7 * 42;
+      const dotY = clamp(frontBack, -0.7, 0.7) / 0.7 * -42;
+      elements.motionDot.style.transform = `translate(calc(-50% + ${dotX}%), calc(-50% + ${dotY}%))`;
+
+      elements.frontValue.textContent = signed(frontBack, 2);
+      elements.sideValue.textContent = signed(sideSide, 2);
+      elements.upValue.textContent = signed(upDown, 2);
+      elements.attitudeValue.textContent = `${signed(roll, 0)}/${signed(pitch, 0)}`;
+
+      setBiBar(elements.xFill, frontBack, 0.8, varColor(frontBack, "x"));
+      setBiBar(elements.yFill, sideSide, 0.8, varColor(sideSide, "y"));
+      setBiBar(elements.zAxisFill, upDown, 0.8, varColor(upDown, "z"));
+      setBiBar(elements.zFill, upDown, 0.8, varColor(upDown, "z"));
+      setBiBar(elements.gxFill, sample.gx, 180, varColor(sample.gx, "gyro"));
+      setBiBar(elements.gyFill, sample.gy, 180, varColor(sample.gy, "gyro"));
+      setBiBar(elements.gzFill, sample.gz, 180, varColor(sample.gz, "gyro"));
+
+      elements.xText.textContent = `${signed(frontBack, 2)} g`;
+      elements.yText.textContent = `${signed(sideSide, 2)} g`;
+      elements.zText.textContent = `${signed(upDown, 2)} g`;
+      elements.gxText.textContent = `${signed(sample.gx, 1)} °/s`;
+      elements.gyText.textContent = `${signed(sample.gy, 1)} °/s`;
+      elements.gzText.textContent = `${signed(sample.gz, 1)} °/s`;
+      elements.timeMeta.textContent = `${Math.round(sample.t)} ms`;
+      elements.tempMeta.textContent = `${sample.temp.toFixed(1)} °C`;
+    }
+
+    function setBiBar(fill, value, max, color) {
+      const pct = clamp(Math.abs(value) / max, 0, 1) * 50;
+      fill.style.width = `${pct}%`;
+      fill.style.left = value < 0 ? `${50 - pct}%` : "50%";
+      fill.style.background = color;
+    }
+
+    function varColor(value, axis) {
+      if (axis === "x") {
+        return value >= 0 ? "var(--teal)" : "var(--amber)";
+      }
+      if (axis === "y") {
+        return value >= 0 ? "var(--blue)" : "var(--rose)";
+      }
+      if (axis === "z") {
+        return value >= 0 ? "var(--green)" : "var(--amber)";
+      }
+      return value >= 0 ? "var(--ink)" : "var(--muted)";
+    }
+
+    function updateHz() {
+      const now = performance.now();
+      if (now - lastHzAt < 500) {
+        return;
+      }
+      const hz = sampleCount / ((now - lastHzAt) / 1000);
+      sampleCount = 0;
+      lastHzAt = now;
+      elements.sampleMeta.textContent = `${hz.toFixed(0)} Hz`;
+    }
+
+    function appendLog(line) {
+      lineCount += 1;
+      logLines.push(line);
+      if (logLines.length > 80) {
+        logLines = logLines.slice(-80);
+      }
+      elements.log.textContent = logLines.join("\n");
+      elements.log.scrollTop = elements.log.scrollHeight;
+      elements.lineMeta.textContent = `${lineCount} lines`;
+    }
+
+    function signed(value, digits) {
+      const fixed = value.toFixed(digits);
+      return value > 0 ? `+${fixed}` : fixed;
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function radiansToDegrees(value) {
+      return value * 180 / Math.PI;
+    }
+  </script>
+</body>
+</html>

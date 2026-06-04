@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CCPA CSV Monitor</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f7;
+      --panel: #ffffff;
+      --text: #162028;
+      --muted: #64727d;
+      --line: #d9e1e6;
+      --accent: #087f8c;
+      --good: #137547;
+      --warn: #a05a00;
+      --bad: #b42318;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    button, input {
+      font: inherit;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .file {
+      max-width: 280px;
+      height: 34px;
+      border: 1px solid var(--line);
+      background: #f9fbfc;
+      padding: 4px 8px;
+    }
+
+    .status {
+      min-width: 128px;
+      height: 34px;
+      border: 1px solid var(--line);
+      background: #f9fbfc;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #8b9aa5;
+    }
+
+    .status.ready .dot { background: var(--good); }
+    .status.error .dot { background: var(--bad); }
+
+    main {
+      padding: 18px 20px 22px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .summary-item, .metric, .table-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .summary-item {
+      min-height: 82px;
+      padding: 13px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .label {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.25;
+    }
+
+    .value {
+      font-size: 26px;
+      line-height: 1;
+      font-weight: 720;
+      letter-spacing: 0;
+      word-break: break-word;
+    }
+
+    .unit {
+      margin-left: 4px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 520;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(250px, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      min-height: 198px;
+      padding: 13px;
+      display: grid;
+      grid-template-rows: auto auto 64px auto;
+      gap: 10px;
+    }
+
+    .metric-head, .metric-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .badge {
+      min-width: 64px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted);
+      background: #f8fafb;
+    }
+
+    .badge.good { color: var(--good); border-color: #b8dbc8; background: #eef8f2; }
+    .badge.warn { color: var(--warn); border-color: #ecd1a5; background: #fff8ed; }
+    .badge.bad { color: var(--bad); border-color: #efb7b1; background: #fff2f1; }
+
+    canvas {
+      width: 100%;
+      height: 64px;
+      display: block;
+      border: 1px solid #edf1f3;
+      background: #fbfcfd;
+    }
+
+    .metric-meta {
+      border-top: 1px solid #edf1f3;
+      padding-top: 9px;
+      font-size: 12px;
+      color: var(--muted);
+      align-items: flex-start;
+    }
+
+    .table-panel {
+      overflow: hidden;
+    }
+
+    .table-panel h2 {
+      margin: 0;
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      max-height: 360px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    th, td {
+      border-bottom: 1px solid #edf1f3;
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f8fafb;
+      color: var(--muted);
+      font-weight: 650;
+    }
+
+    @media (max-width: 1120px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 680px) {
+      header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .toolbar { justify-content: flex-start; }
+      .grid, .summary { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CCPA CSV Monitor</h1>
+    <div class="toolbar">
+      <input id="fileInput" class="file" type="file" accept=".csv,text/csv">
+      <div id="status" class="status"><span class="dot"></span><span id="statusText">No CSV</span></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary" aria-label="CSV summary">
+      <div class="summary-item">
+        <div class="label">資料筆數</div>
+        <div><span id="rowCount" class="value">--</span><span class="unit">rows</span></div>
+      </div>
+      <div class="summary-item">
+        <div class="label">時間範圍</div>
+        <div><span id="duration" class="value">--</span><span class="unit">sec</span></div>
+      </div>
+      <div class="summary-item">
+        <div class="label">取樣間隔</div>
+        <div><span id="sampleMs" class="value">--</span><span class="unit">ms</span></div>
+      </div>
+      <div class="summary-item">
+        <div class="label">最後更新</div>
+        <div><span id="lastTime" class="value">--</span></div>
+      </div>
+    </section>
+
+    <section id="metrics" class="grid" aria-label="Telemetry metrics"></section>
+
+    <section class="table-panel">
+      <h2>Latest Rows</h2>
+      <div class="table-wrap">
+        <table id="previewTable"></table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const statusEl = document.getElementById("status");
+    const statusText = document.getElementById("statusText");
+    const metricsEl = document.getElementById("metrics");
+    const previewTable = document.getElementById("previewTable");
+
+    const metricDefs = [
+      { key: "speed(kph)", label: "車速", unit: "KPH", type: "number", warn: (v) => v < 0 || v > 80 },
+      { key: "cadence(rpm)", label: "踏頻", unit: "RPM", type: "number", warn: (v) => v < 0 || v > 180 },
+      { key: "torque(nm)", label: "踩踏扭矩", unit: "Nm", type: "number", decimals: 2, warn: (v) => v < 0 || v > 250 },
+      { key: "motor_speed(rpm)", label: "馬達轉速", unit: "RPM", type: "number", warn: (v) => v < 0 || v > 20000 },
+      { key: "riding_mode", label: "輔助力模式", unit: "Mode", type: "category" },
+      { key: "battery_capacity(%)", label: "電池電量", unit: "%", type: "number", warn: (v) => v < 10 || v > 100 },
+      { key: "battery_voltage(mv)", label: "電池電壓", unit: "mV", type: "number", warn: (v) => v <= 0 },
+      { key: "battery_current(ma)", label: "電池電流", unit: "mA", type: "number" },
+      { key: "battery_temp1(c)", label: "電池溫度 1", unit: "°C", type: "number", warn: tempWarn },
+      { key: "battery_temp2(c)", label: "電池溫度 2", unit: "°C", type: "number", warn: tempWarn },
+      { key: "battery_temp3(c)", label: "電池溫度 3", unit: "°C", type: "number", warn: tempWarn },
+      { key: "battery_temp4(c)", label: "電池溫度 4", unit: "°C", type: "number", warn: tempWarn },
+      { key: "rear_gear", label: "變速器目前檔位", unit: "Gear", type: "category" }
+    ];
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      try {
+        const text = await readFileText(file);
+        renderCsv(text, file.name);
+      } catch (error) {
+        setStatus(error.message || "CSV read failed", "error");
+      }
+    });
+
+    function readFileText(file) {
+      if (typeof file.text === "function") {
+        return file.text();
+      }
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error || new Error("File read failed"));
+        reader.readAsText(file);
+      });
+    }
+
+    function tempWarn(value) {
+      return value < -40 || value > 85;
+    }
+
+    function renderCsv(text, name) {
+      const rows = parseCsv(text);
+      if (rows.length < 2) {
+        setStatus("Empty CSV", "error");
+        return;
+      }
+
+      const headers = rows[0].map((header) => header.replace(/^\uFEFF/, ""));
+      const data = rows.slice(1).filter((row) => row.some((cell) => cell.trim() !== "")).map((row) => {
+        const out = {};
+        headers.forEach((header, index) => {
+          out[header] = row[index] ?? "";
+        });
+        return out;
+      });
+
+      if (!data.length) {
+        setStatus("No data rows", "error");
+        return;
+      }
+
+      renderSummary(data, name);
+      renderMetrics(data);
+      renderPreview(headers, data.slice(-30).reverse());
+      setStatus("Loaded", "ready");
+    }
+
+    function parseCsv(text) {
+      const rows = [];
+      let row = [];
+      let cell = "";
+      let inQuotes = false;
+
+      for (let index = 0; index < text.length; index += 1) {
+        const ch = text[index];
+        const next = text[index + 1];
+        if (inQuotes) {
+          if (ch === "\"" && next === "\"") {
+            cell += "\"";
+            index += 1;
+          } else if (ch === "\"") {
+            inQuotes = false;
+          } else {
+            cell += ch;
+          }
+        } else if (ch === "\"") {
+          inQuotes = true;
+        } else if (ch === ",") {
+          row.push(cell);
+          cell = "";
+        } else if (ch === "\n") {
+          row.push(cell.replace(/\r$/, ""));
+          rows.push(row);
+          row = [];
+          cell = "";
+        } else {
+          cell += ch;
+        }
+      }
+
+      if (cell || row.length) {
+        row.push(cell.replace(/\r$/, ""));
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    function renderSummary(data, name) {
+      const times = data.map((row) => Date.parse(row.time)).filter((value) => Number.isFinite(value));
+      const first = times[0];
+      const last = times[times.length - 1];
+      const duration = Number.isFinite(first) && Number.isFinite(last) ? Math.max(0, (last - first) / 1000) : null;
+      const intervals = [];
+      for (let index = 1; index < times.length; index += 1) {
+        intervals.push(times[index] - times[index - 1]);
+      }
+      document.getElementById("rowCount").textContent = data.length;
+      document.getElementById("duration").textContent = duration === null ? "--" : duration.toFixed(1);
+      document.getElementById("sampleMs").textContent = intervals.length ? median(intervals).toFixed(0) : "--";
+      document.getElementById("lastTime").textContent = data[data.length - 1].time || name || "--";
+    }
+
+    function renderMetrics(data) {
+      metricsEl.textContent = "";
+      for (const def of metricDefs) {
+        if (!(def.key in data[0])) continue;
+        const card = document.createElement("article");
+        card.className = "metric";
+
+        const series = data.map((row) => row[def.key]).filter((value) => value !== undefined && value !== "");
+        const latest = series.length ? series[series.length - 1] : "";
+        const numeric = def.type === "number" ? series.map(Number).filter((value) => Number.isFinite(value)) : [];
+        const stats = numeric.length ? summarize(numeric) : null;
+        const status = metricStatus(def, numeric, latest);
+
+        card.innerHTML = `
+          <div class="metric-head">
+            <div class="label">${def.label}</div>
+            <span class="badge ${status.className}">${status.text}</span>
+          </div>
+          <div><span class="value">${formatLatest(def, latest)}</span><span class="unit">${def.unit}</span></div>
+          <canvas></canvas>
+          <div class="metric-meta">
+            <span>${stats ? `min ${formatNumber(stats.min, def)} / max ${formatNumber(stats.max, def)}` : `values ${uniqueCount(series)}`}</span>
+            <span>${stats ? `avg ${formatNumber(stats.avg, def)}` : `changes ${countChanges(series)}`}</span>
+          </div>
+        `;
+        metricsEl.appendChild(card);
+        drawSparkline(card.querySelector("canvas"), numeric);
+      }
+    }
+
+    function renderPreview(headers, rows) {
+      const shownHeaders = headers.filter((header) => metricDefs.some((def) => def.key === header) || header === "time");
+      previewTable.innerHTML = `
+        <thead><tr>${shownHeaders.map((header) => `<th>${header}</th>`).join("")}</tr></thead>
+        <tbody>
+          ${rows.map((row) => `<tr>${shownHeaders.map((header) => `<td>${escapeHtml(row[header] ?? "")}</td>`).join("")}</tr>`).join("")}
+        </tbody>
+      `;
+    }
+
+    function metricStatus(def, numeric, latest) {
+      if (!latest && latest !== 0) return { text: "empty", className: "warn" };
+      if (def.type !== "number") {
+        return countChanges(numeric.length ? numeric : [latest]) > 0 ? { text: "tracking", className: "good" } : { text: "latest", className: "good" };
+      }
+      if (!numeric.length) return { text: "empty", className: "warn" };
+      const hasWarn = typeof def.warn === "function" && numeric.some(def.warn);
+      if (hasWarn) return { text: "check", className: "warn" };
+      if (numeric.every((value) => value === numeric[0])) return { text: "steady", className: "good" };
+      return { text: "active", className: "good" };
+    }
+
+    function summarize(values) {
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+      return { min, max, avg };
+    }
+
+    function median(values) {
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+
+    function formatLatest(def, value) {
+      if (value === undefined || value === "") return "--";
+      if (def.type === "number") return formatNumber(Number(value), def);
+      return String(value);
+    }
+
+    function formatNumber(value, def) {
+      if (!Number.isFinite(value)) return "--";
+      const decimals = def.decimals ?? (Math.abs(value) < 10 && value % 1 !== 0 ? 2 : 0);
+      return value.toFixed(decimals);
+    }
+
+    function uniqueCount(values) {
+      return new Set(values.filter((value) => value !== "")).size;
+    }
+
+    function countChanges(values) {
+      let changes = 0;
+      for (let index = 1; index < values.length; index += 1) {
+        if (values[index] !== values[index - 1]) changes += 1;
+      }
+      return changes;
+    }
+
+    function drawSparkline(canvas, values) {
+      const context = canvas.getContext("2d");
+      const rect = canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+      canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+      context.scale(ratio, ratio);
+      context.clearRect(0, 0, rect.width, rect.height);
+      context.strokeStyle = "#d9e1e6";
+      context.beginPath();
+      context.moveTo(0, rect.height - 1);
+      context.lineTo(rect.width, rect.height - 1);
+      context.stroke();
+
+      if (values.length < 2) return;
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const span = max - min || 1;
+      context.strokeStyle = "#087f8c";
+      context.lineWidth = 2;
+      context.beginPath();
+      values.forEach((value, index) => {
+        const x = values.length === 1 ? 0 : (index / (values.length - 1)) * rect.width;
+        const y = rect.height - 6 - ((value - min) / span) * (rect.height - 12);
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      });
+      context.stroke();
+    }
+
+    function setStatus(text, className) {
+      statusText.textContent = text;
+      statusEl.className = `status ${className || ""}`.trim();
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+  </script>
+</body>
+</html>
